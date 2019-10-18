@@ -17,6 +17,28 @@ from collections import OrderedDict
 import multiprocessing
 import numpy as np
 import tensorflow as tf
+from keras.backend import tensorflow_backend
+
+## limits the GPU utilization
+## Ref
+## https://github.com/keras-team/keras/issues/1538
+## https://stackoverflow.com/questions/44813939/could-not-satisfy-explicit-device-specification-devicegpu0-because-no-devic
+
+# From /aimldl-cod/external/Mask_RCNN/mrcnn/model.py:27: The name tf.ConfigProto is deprecated. Please use tf.compat.v1.ConfigProto instead
+# From /aimldl-cod/external/Mask_RCNN/mrcnn/model.py:36: The name tf.Session is deprecated. Please use tf.compat.v1.Session instead.
+
+config = tf.compat.v1.ConfigProto()
+GPU_MEMORY_FRACTION = 0.25
+TF_ALLOW_GROWTH = True
+ALLOW_SOFT_PLACEMENT = True
+LOG_DEVICE_PLACEMENT = True
+
+config.gpu_options.allow_growth = TF_ALLOW_GROWTH
+config.allow_soft_placement = ALLOW_SOFT_PLACEMENT
+config.log_device_placement = LOG_DEVICE_PLACEMENT
+
+tensorflow_backend.set_session(tf.compat.v1.Session(config=config))
+
 import keras
 import keras.backend as K
 import keras.layers as KL
