@@ -792,7 +792,8 @@ def refine_detections_graph(rois, probs, deltas, window, config):
     detections = tf.concat([
         tf.gather(refined_rois, keep),
         tf.dtypes.cast(tf.gather(class_ids, keep), tf.float32)[..., tf.newaxis],
-        tf.gather(class_scores, keep)[..., tf.newaxis]
+        tf.gather(class_scores, keep)[..., tf.newaxis],
+        tf.gather(probs, keep)
         ], axis=1)
 
     # Pad with zeros if detections < DETECTION_MAX_INSTANCES
@@ -839,10 +840,10 @@ class DetectionLayer(KE.Layer):
         # normalized coordinates
         return tf.reshape(
             detections_batch,
-            [self.config.BATCH_SIZE, self.config.DETECTION_MAX_INSTANCES, 6])
+            [self.config.BATCH_SIZE, self.config.DETECTION_MAX_INSTANCES, 6+self.config.NUM_CLASSES])
 
     def compute_output_shape(self, input_shape):
-        return (None, self.config.DETECTION_MAX_INSTANCES, 6)
+        return (None, self.config.DETECTION_MAX_INSTANCES, 6+self.config.NUM_CLASSES)
 
 
 ############################################################
@@ -2436,6 +2437,7 @@ class MaskRCNN():
         class_ids = detections[:N, 4].astype(np.int32)
         scores = detections[:N, 5]
         masks = mrcnn_mask[np.arange(N), :, :, class_ids]
+        dists = detections[:N, 6:]
 
         # Translate normalized coordinates in the resized image to pixel
         # coordinates in the original image before resizing
@@ -2459,6 +2461,7 @@ class MaskRCNN():
             class_ids = np.delete(class_ids, exclude_ix, axis=0)
             scores = np.delete(scores, exclude_ix, axis=0)
             masks = np.delete(masks, exclude_ix, axis=0)
+            dists = np.delete(dists, exclude_ix, axis=0)
             N = class_ids.shape[0]
 
         # Resize masks to original image size and set boundary threshold.
@@ -2470,7 +2473,7 @@ class MaskRCNN():
         full_masks = np.stack(full_masks, axis=-1)\
             if full_masks else np.empty(original_image_shape[:2] + (0,))
 
-        return boxes, class_ids, scores, full_masks
+        return boxes, class_ids, scores, full_masks, dists
 
     def detect(self, images, verbose=0):
         """Runs the detection pipeline.
@@ -2518,7 +2521,7 @@ class MaskRCNN():
         # Process detections
         results = []
         for i, image in enumerate(images):
-            final_rois, final_class_ids, final_scores, final_masks =\
+            final_rois, final_class_ids, final_scores, final_masks, dist =\
                 self.unmold_detections(detections[i], mrcnn_mask[i],
                                        image.shape, molded_images[i].shape,
                                        windows[i])
@@ -2527,6 +2530,7 @@ class MaskRCNN():
                 "class_ids": final_class_ids,
                 "scores": final_scores,
                 "masks": final_masks,
+                "score_dist": dist
             })
         return results
 
